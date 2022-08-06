@@ -1,0 +1,71 @@
+## Create files with mid point +/- 2 Kb 
+
+cat intergenic_enhancer2.bed| awk '{mid=($2+$3)/2; print($1"\t"mid-2000"\t"mid)}' > intergenic.enhancer_upstream.bed
+cat intergenic_enhancer2.bed| awk '{mid=($2+$3)/2; print($1"\t"mid"\t"mid+2000)}' > intergenic.enhancer_downstream.bed
+
+## Check for negative values
+R
+
+up <- read.table("intergenic.enhancer_upstream.bed",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
+down <- read.table("intergenic.enhancer_downstream.bed",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
+
+> up2 <- up[which(up$V2 < 0),]
+
+> head(up2)
+[1] V1 V2 V3
+<0 rows> (or 0-length row.names)
+
+> down2 <- down[which(down$V3 < 0),]
+> head(down2)
+[1] V1 V2 V3
+<0 rows> (or 0-length row.names)
+
+# In order to computeMatrix, you need whole numbers
+# Create new bed file with rounded values
+
+> up$roundv2 <- round(up$V2)
+
+> up$roundv3 <- round(up$V3)
+
+> up2 <- up[c(1,4,5)]
+
+> head(up2)
+    V1 roundv2 roundv3
+1 Chr1    1130    3130
+2 Chr1   19119   21119
+3 Chr1   19465   21465
+4 Chr1   53478   55478
+5 Chr1   66600   68600
+6 Chr1   75659   77659
+
+> write.table(up2, "intergenic.enhancer_upstream.round.bed", sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE)
+
+
+
+bigWigAverageOverBed GSM4609832_NH_K27Me3.sort.q2.bw intergenic.enhancer_upstream.round.2.bed GSM4609832_NH_K27Me3.sort.q2_intergenic.enhancer_upstream.tab 
+processing chromosomes.....
+
+
+
+# General Pipeline
+
+separate upstream and downstream bed file
+
+calculate BW Avg Over Bed (position, signal)
+
+Get Cluster info from seqplots (position, cluster ID)
+
+combine BWAvgOverBed with Cluster info
+
+subtract upstream - downstream  BWAvgOverBed per cluster
+
+take absolute value of skew for each cluster
+
+Sum/Avg of skew for all clusters for each bw file = total skew
+
+
+
+
+
+
+
