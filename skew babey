@@ -20,7 +20,7 @@ down <- read.table("intergenic.enhancer_downstream.bed",header = FALSE, sep="\t"
 [1] V1 V2 V3
 <0 rows> (or 0-length row.names)
 
-# In order to computeMatrix, you need whole numbers
+# In order to di BigWigAvgOverBed, you need whole numbers
 # Create new bed file with rounded values
 
 > up$roundv2 <- round(up$V2)
@@ -46,60 +46,62 @@ processing chromosomes.....
 
 # Combine bigWigAverageOverBed output with upstream bed coordinates (K27me3.txt)
 # There is a quirk with SeqPlots where the Cluster output file has a starting coordinate -1, which was messing up calling cluster IDs
-# Make a new starting column in the Cluster excel sheet and calculate midpoint off of that
-
-> c <- read.table("Clusters_2022-08-05_19-27-45.out.csv", header = TRUE, sep=",",stringsAsFactors=FALSE, quote="")
-> c$newmid2 <- round(c$newmid)
-> c$newmid2chr <- paste(c$chromosome,":",c$newmid2,sep="")
-
-> x <- read.table("K27me3.txt", header = TRUE, sep="\t",stringsAsFactors=FALSE, quote="")
-
-> x$cluster <- ifelse(x$chrmid == c$newmid2chr, c$ClusterID, NA)
-> table(x$cluster)
-
-   1    2    3    4    5    6    7    8 
- 620  835  905  645  892 1676  828  952 
- 
- > head(x)
-   chr start   mid            chrbp     chrmid bigwigoverbed cluster
-1 Chr1  1130  3130   Chr1:1130-3130  Chr1:3130      168.1220       3
-2 Chr1 19119 21119 Chr1:19119-21119 Chr1:21119      642.1320       8
-3 Chr1 19465 21465 Chr1:19465-21465 Chr1:21465      347.6700       6
-4 Chr1 53478 55478 Chr1:53478-55478 Chr1:55478       18.7736       6
-5 Chr1 66600 68600 Chr1:66600-68600 Chr1:68600      527.9340       4
-6 Chr1 75659 77659 Chr1:75659-77659 Chr1:77659      220.8310       2
 
 
-> write.table(c, "Clusters_2022-08-05_19-27-45.new.bed", sep="\t", quote=FALSE, col.names=TRUE, row.names=FALSE)
-> write.table(x, "K27me3.upstream.cluster.bed", sep="\t",quote=FALSE, col.names=TRUE, row.names=FALSE)
+# Read in cluster info
+c <- read.table("Clusters_2022-08-05_19-27-45.csv", header = TRUE, sep=",",stringsAsFactors=FALSE, quote="")
 
-> down <- read.table("GSM4609832_NH_K27Me3.sort.q2_intergenic.enhancer_downstream.tab",header=FALSE,sep="\t")
-> head(down)
-                      V1   V2   V3        V4        V5        V6
-1 Chr1:11824500-11826500 2000 2000   55978.3   27.9892   27.9892
-2       Chr1:21465-23465 2000 2000  529023.0  264.5120  264.5120
-3       Chr1:55478-57478 2000 2000  224474.0  112.2370  112.2370
-4       Chr1:68600-70600 2000 2000 1849090.0  924.5460  924.5460
-5       Chr1:77659-79659 2000 2000 2984540.0 1492.2700 1492.2700
-6       Chr1:81875-83875 2000 2000 3528880.0 1764.4400 1764.4400
+# Calculate Midpoint
+c[,3:4] <- sapply(c[,3:4],as.numeric)
+c$average <- round(rowMeans(subset(c,select=c(start,end))))
 
-# Make new file like old one
 
-# Need chromosome and midpoint in Chr:BP format
-# Remember midpoint is the 'start' in the downstream file
+# Read in up/down bed files
+up <- read.table("intergenic.enhancer_upstream.round.2.bed",sep="\t",header=FALSE)
+down <- read.table("intergenic.enhancer_down.round.bed",sep="\t",header=FALSE)
 
-> down <- down %>% separate(V1, c("Chr","Mid","End"))
-> down$chrmid <- paste(down$Chr,":",down$Mid,sep="")
+# Read in original and re-calculate midpoint
+ie <- read.table("intergenic_enhancer2.bed",sep="\t")
+ie$V2_plus1 <- as.numeric(paste(ie$V2 + 1))
 
-> down$cluster <- ifelse(down$chrmid == c$newmid2chr, c$ClusterID, NA)
-> table(down$cluster)
+ie$average <- round(rowMeans(subset(ie,select=c(V2_plus1, V3))))
 
-  1   2   3   4   5   6   7   8 
-142 181 238 156 246 442 205 229 
+up$check <- ifelse(up$V3 == ie$average, ie$average, NA)
+# There are some discrepancies so just paste those bad boys together
+up$check2 <- ie$average
 
-> write.table(down, "K27me3.down.cluster.bed", sep="\t",quote=FALSE, col.names=TRUE, row.names=FALSE)
+# Sanity check
+check <- up[which(up$check == up$check2),]
 
-# Need to make new dataframe with sums for each cluster
+# Get cluster info for each coordinate
+up$cluster <- ifelse(up$check2 == c$average, c$ClusterID, NA)
+table(up$cluster)
+
+#1    2    3    4    5    6    7    8 
+#982 1360 1465 1088 1427 2760 1295 1529 
+
+upna <- as.data.frame(is.na(up$cluster))
+table(upna)
+
+# FALSE  TRUE 
+# 11906    19 
+
+# Do this again with the down file
+down$check <- ifelse(down$V2== ie$average, ie$average, NA)
+down$check2 <- ie$average
+
+down$cluster <- ifelse(down$check2 == c$average, c$ClusterID, NA)
+table(down$cluster)
+
+# 1    2    3    4    5    6    7    8 
+# 982 1360 1465 1088 1427 2760 1295 1529 
+
+# Good these should match!
+
+
+
+
+
 
 
 # General Pipeline
