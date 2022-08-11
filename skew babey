@@ -109,8 +109,28 @@ table(down$cluster)
 
 # Good these should match!
 
+#----------------------------------------------------------------------
+## Load in BWAvgBed Output
 
+gro_down <- read.table("groseq.forward.Chr.merge.sorted.bw.intergenic_enhancer.down.tab",sep="\t")
 
+# Separate V1 to get mid
+gro_down2 <- gro_down %>% separate(V1, c("CHR","Mid", "End"))
+
+#Make numeric
+down[,2] <- sapply(down[,2],as.numeric)
+gro_down2[,2] <- sapply(gro_down2[,2],as.numeric)
+
+#Reorder
+gro_down3 <- gro_down2[order(gro_down2$CHR,gro_down2$Mid),]
+
+#Get cluster info
+gro_down3$cluster <- ifelse(gro_down3$Mid %in% down$V2, down$cluster,NA)
+
+#Calculate Skew = | Up - Down |
+gro_merge2$skew <- paste(abs(gro_merge2$`Mean-up` - gro_merge2$`Mean-down`))
+
+write.table(gro_merge2, "groseq.intergenic_enhancer.merge.cluster.bed",quote=FALSE,row.names = FALSE,col.names = TRUE)
 
 
 
