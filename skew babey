@@ -1,3 +1,7 @@
+########################################################################################################################################
+# Create Upstream and Downstream Intergenic Enhancer Bed Files
+########################################################################################################################################
+
 ## Create files with mid point +/- 2 Kb 
 
 cat intergenic_enhancer2.bed| awk '{mid=($2+$3)/2; print($1"\t"mid-2000"\t"mid)}' > intergenic.enhancer_upstream.bed
@@ -40,11 +44,18 @@ down <- read.table("intergenic.enhancer_downstream.bed",header = FALSE, sep="\t"
 
 > write.table(up2, "intergenic.enhancer_upstream.round.bed", sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE)
 
-#Example code for getting bigwig signal
-bigWigAverageOverBed GSM4609832_NH_K27Me3.sort.q2.bw intergenic.enhancer_upstream.round.2.bed GSM4609832_NH_K27Me3.sort.q2_intergenic.enhancer_upstream.tab 
-processing chromosomes.....
+########################################################################################################################################
+# BigWigAverageOverBed
+########################################################################################################################################
 
-# Combine bigWigAverageOverBed output with upstream bed coordinates (K27me3.txt)
+for FILE in *.bw; do bigWigAverageOverBed $FILE intergenic.enhancer_down.round.bed $FILE.intergenic_enhancer.down.tab; done
+for FILE in *.bw; do bigWigAverageOverBed $FILE intergenic.enhancer_upstream.round.2.bed $FILE.intergenic_enhancer.up.tab; done 
+
+
+########################################################################################################################################
+# Combine with Cluster Data
+########################################################################################################################################
+
 # There is a quirk with SeqPlots where the Cluster output file has a starting coordinate -1, which was messing up calling cluster IDs
 
 
