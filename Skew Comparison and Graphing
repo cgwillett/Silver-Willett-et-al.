@@ -1,0 +1,188 @@
+## Load libraries
+library(dplyr)
+library(ggplot2)
+
+
+## Read in Master Files
+
+Dm <- read.table("~/Desktop/Figures/Bed Files/Drosophila/DM.intergenic_enhancer.skew.bed",header=T)
+
+Hs <- read.table("~/Desktop/Figures/Bed Files/Human/Hs.intergenic_enhancer.skew.bed",header=T)
+# reorder to match Drosophila
+Hs2 <- Hs[c(2,1,3:4,7,6,5)]
+Hs <- Hs2
+
+At <- read.table("~/Desktop/Figures/Bed Files/Skew/AT.intergenic_enhancer.skew.bed", header=T)
+
+# Make column names match
+colnames(Hs) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+colnames(Dm) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+colnames(At) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+
+# Combine them all together
+skew <- rbind(Hs, Dm, At)
+write.table(skew, "All.skew.intergenic_enhancer.bed",row.names = F,col.names = T, quote=F)
+
+###################################################################################################################
+# Get summary stats for each species
+###################################################################################################################
+
+summary(Dm$SKEW)
+#Min.    1st Qu.     Median       Mean    3rd Qu.       Max.       NA's 
+# 0.000e+00  0.000e+00  4.000e+00 9.406e+299  1.800e+01 6.920e+304          6 
+
+summary(At$SKEW)
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0      23     145     546     448 7961504 
+
+summary(Hs$SKEW)
+#Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#0.0      0.2      1.6     84.5      5.8 333982.0 
+
+###################################################################################################################
+# Wilcox Rank Sum Test
+###################################################################################################################
+
+#Arabidopsis vs. Human
+skew2 <- skew[which(skew$TYPE=="Arabidopsis" | skew$TYPE=="Human"),]
+
+res <- wilcox.test(SKEW ~ TYPE, data = skew2,
+                   exact = FALSE)
+res
+
+#Wilcoxon rank sum test with continuity correction
+
+#data:  SKEW by TYPE
+#W = 5140158026, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+##-------------------------------------------------------------------------------------------
+
+#Arabidopsis vs. Drosophila
+skew3 <- skew[which(skew$TYPE=="Arabidopsis" | skew$TYPE=="Drosophila"),]
+
+res2 <- wilcox.test(SKEW ~ TYPE, data = skew3,
+                   exact = FALSE)
+res2
+
+#Wilcoxon rank sum test with continuity correction
+
+#data:  SKEW by TYPE
+#W = 4240323309, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+
+###################################################################################################################
+# Log2 Transform Skew
+###################################################################################################################
+
+skew$SKEWlog2 <- log2(skew$SKEW)
+
+Hs$SKEWlog2 <- log2(Hs$SKEW)
+Hs[Hs < 0 ] <- 0
+
+Dm$SKEWlog2 <- log2(Dm$SKEW)
+Dm[Dm<0] <- 0
+
+# Remove bonkers outliers from Drosophila
+Dm2 <- Dm[which(Dm$SKEWlog2 > 50),]
+# only 2
+
+Dm3 <- anti_join(Dm, Dm2)
+Dm3 <- na.omit(Dm3)
+Dm <- Dm3  
+
+At$SKEWlog2 <- log2(At$SKEW)
+At[At<0] <- 0
+
+# New dataset with log2 transformed data
+skewlog <- rbind(Dm,Hs,At)
+write.table(skewlog, "Skew.intergenic_enhancer.log.bed",col.names = T, row.names = F, quote = F)
+
+# Write function to calculate mean and min/max
+data_summary <- function(x) {
+  m <- mean(x)
+  ymin <- m-sd(x)
+  ymax <- m+sd(x)
+  return(c(y=m,ymin=ymin,ymax=ymax))
+}
+  
+# Create x axis labels
+xlabs <- c("A.thaliana", "D. melanogaster", "H. sapiens")
+
+
+ggplot(skewlog, aes(x=TYPE, y=SKEWlog2, color=TYPE)) + 
+  # Violin Plot
+  geom_violin() +
+  # Also graph mean, max and min
+  stat_summary(fun.data=data_summary) +
+  # Get rid of legend, center and bold title, italicize x axis
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5,face="bold"),axis.text.x = element_text(face="italic") ) +
+  # Edit axes labels and title
+  labs(title="Skew of BigWig Signal Over Intergenic Enhancer Regions for all Datasets",
+       x="Species", y="Skew (log2)") +
+  # Rename x axis text
+  scale_x_discrete(labels=xlabs) 
+##-------------------------------------------------------------------------------------------
+
+
+# Get summary stats for log2 transformed data
+skewlog %>%
+  group_by(TYPE) %>%
+  summarise(
+    count = n(),
+    mean = mean(SKEWlog2),
+    median = median(SKEWlog2),
+    sd = sd(SKEWlog2)
+  )
+
+#TYPE        count  mean median    sd
+#<chr>       <int> <dbl>  <dbl> <dbl>
+#  1 Arabidopsis 71860  6.48  7.18   3.12
+#  2 Drosophila  73592  2.64  2.02   3.07
+#  3 Human       83124  1.77  0.688  2.39
+
+# Summary stats for raw skew data
+skewlog %>%
+  group_by(TYPE) %>%
+  summarise(
+    count = n(),
+    mean = mean(SKEW),
+    median = median(SKEW),
+    sd = sd(SKEW)
+  )
+
+#TYPE        count  mean median     sd
+#<chr>       <int> <dbl>  <dbl>  <dbl>
+#  1 Arabidopsis 71860 546.  145.   29760.
+#  2 Drosophila  73592 141.    4.06  1000.
+#  3 Human       83124  84.5   1.61  2535.
+##-------------------------------------------------------------------------------------------
+
+## Wilcoxon Rank Sum Test with Transformed Data
+
+
+#Arabidopsis vs. Human
+skew2 <- skewlog[which(skewlog$TYPE=="Arabidopsis" | skewlog$TYPE=="Human"),]
+
+res <- wilcox.test(SKEWlog2 ~ TYPE, data = skew2)
+res
+
+#Wilcoxon rank sum test with continuity correction
+
+#data:  SKEW by TYPE
+#W = 5140158026, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+##-------------------------------------------------------------------------------------------
+
+#Arabidopsis vs. Drosophila
+skew3 <- skewlog[which(skewlog$TYPE=="Arabidopsis" | skewlog$TYPE=="Drosophila"),]
+
+res2 <- wilcox.test(SKEWlog2 ~ TYPE, data = skew3, conf.int=T, conf.level=0.95)
+res2
+
+
+#Wilcoxon rank sum test with continuity correction
+
+#data:  SKEW by TYPE
+#W = 4240323309, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+
