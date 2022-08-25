@@ -1,0 +1,51 @@
+## Example of how all datasets were processed
+# All bed files were made the same way as documented in "skew babey"
+# bigWigAverageOverBed to get .tab files
+# No cluster info necessary for these datasets
+
+
+###################################################################################################################
+## GRO-seq Forward
+###################################################################################################################
+
+gro_down <- read.table("HgGRO.REsort.q2.TxtWr-fwdStr.RPKM.bw.intergenic_enhancer.down.tab",sep="\t")
+gro_up <- read.table("HgGRO.REsort.q2.TxtWr-fwdStr.RPKM.bw.intergenic_enhancer.up.tab",sep="\t")
+
+# Separate V1 to get mid
+gro_down2 <- gro_down %>% separate(V1, c("CHR","Mid"))
+gro_up2 <- gro_up %>% separate(V1, c("CHR", "Mid") )
+
+# Merge up and down
+gro_merge <- merge(gro_down2, gro_up2, by="Mid")
+gro_merge2 <- gro_merge[c(1:2,7,13)]
+colnames(gro_merge2) <- c("Mid","Chr","Mean-down", "Mean-up")
+
+
+#Reorder
+gro_merge2[,1] <- sapply(gro_merge2[,1],as.numeric)
+gro_merge3 <- gro_merge2[order(gro_merge2$Chr,gro_merge2$Mid),]
+
+gro_merge2 <- gro_merge3
+
+gro_merge2$Type <- paste("Human")
+gro_merge2$ID <- paste("GRO-seq(+)")
+
+#Calculate Skew
+gro_merge2$skew <- paste(abs(gro_merge2$`Mean-up` - gro_merge2$`Mean-down`))
+write.table(gro_merge2, "Hs.groseq.forward.intergenic_enhancer.merge.bed",quote=FALSE,row.names = FALSE,col.names = TRUE)
+###################################################################################################################
+
+
+
+
+# Merge all datasets together
+Hs_merge <- rbind(H3K27ac_merge2,H3K27me3_merge2,H3K4me1_merge2,H3K4me3_merge2,gro_merge2,gro_merge_rev)
+write.table(Hs_merge,"Hs.intergenic_enhancer.skew.bed",quote=F, row.names = F, col.names = T)
+
+Dm <- rbind(gro_for,gro_rev,K4me3,K4me1, K27ac,K27me3)
+Dm$Type <- paste("Drosophila")
+write.table(Dm2, "DM.intergenic_enhancer.skew.bed",col.names = T, row.names = F, quote = F)
+
+
+
+
