@@ -2,47 +2,31 @@
 # Create Upstream and Downstream Intergenic Enhancer Bed Files
 ########################################################################################################################################
 
-## Create files with mid point +/- 2 Kb 
+## Create files with mid point +/- 1 Kb 
 
-cat intergenic_enhancer2.bed| awk '{mid=($2+$3)/2; print($1"\t"mid-2000"\t"mid)}' > intergenic.enhancer_upstream.bed
-cat intergenic_enhancer2.bed| awk '{mid=($2+$3)/2; print($1"\t"mid"\t"mid+2000)}' > intergenic.enhancer_downstream.bed
+at <- read.delim("Downloads/intergenic_enhancer2.bed", header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
+
+# Calculate midpoint
+# Needs to be a whole number, so make sure to round()
+at$mid <- round((at$V2 + at$V3)/2)
+
+# Make upstream file (Chr, Mid-1000, Mid)
+at_up <- at[c(1,4)]
+at_up$mid_1kb <- at_up$mid - 1000
+at_up2 <- at_up[c(1,3,2)]
+write.table(at_up2, "Downloads/"At_intergenic_enh_upstream_1kb.bed", sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE)
+
+# Make downstream file (Chr, Mid, Mid+1000)
+at_down <- at[c(1,4)]
+at_down$mid_1kb <- at_down$mid +1000
+write.table(at_down, "Downloads/At_intergenic_enh_downstream_1kb.bed", sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE)
 
 ## Check for negative values
-R
+up <- read.table("At_intergenic_enh_upstream_1kb.bed",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
+down <- read.table("At_intergenic_enh_downstream_1kb.bed",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
 
-up <- read.table("intergenic.enhancer_upstream.bed",$
-down <- read.table("intergenic.enhancer_downstream.bed",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote="")
-
-> up2 <- up[which(up$V2 < 0),]
-
-> head(up2)
-[1] V1 V2 V3
-<0 rows> (or 0-length row.names)
-
-> down2 <- down[which(down$V3 < 0),]
-> head(down2)
-[1] V1 V2 V3
-<0 rows> (or 0-length row.names)
-
-# In order to di BigWigAvgOverBed, you need whole numbers
-# Create new bed file with rounded values
-
-> up$roundv2 <- round(up$V2)
-
-> up$roundv3 <- round(up$V3)
-
-> up2 <- up[c(1,4,5)]
-
-> head(up2)
-    V1 roundv2 roundv3
-1 Chr1    1130    3130
-2 Chr1   19119   21119
-3 Chr1   19465   21465
-4 Chr1   53478   55478
-5 Chr1   66600   68600
-6 Chr1   75659   77659
-
-> write.table(up2, "intergenic.enhancer_upstream.round.bed", sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE)
+up2 <- up[which(up$V2 < 0),]
+down2 <- down[which(down$V3 < 0),]
 
 ########################################################################################################################################
 # BigWigAverageOverBed
@@ -52,85 +36,191 @@ for FILE in *.bw; do bigWigAverageOverBed $FILE intergenic.enhancer_down.round.b
 for FILE in *.bw; do bigWigAverageOverBed $FILE intergenic.enhancer_upstream.round.2.bed $FILE.intergenic_enhancer.up.tab; done 
 
 
-########################################################################################################################################
-# Combine with Cluster Data
-########################################################################################################################################
-
-# There is a quirk with SeqPlots where the Cluster output file has a starting coordinate -1, which was messing up calling cluster IDs
-
-
-# Read in cluster info
-c <- read.table("Clusters_2022-08-05_19-27-45.csv", header = TRUE, sep=",",stringsAsFactors=FALSE, quote="")
-
-# Calculate Midpoint
-c[,3:4] <- sapply(c[,3:4],as.numeric)
-c$average <- round(rowMeans(subset(c,select=c(start,end))))
-
-
-# Read in up/down bed files
-up <- read.table("intergenic.enhancer_upstream.round.2.bed",sep="\t",header=FALSE)
-down <- read.table("intergenic.enhancer_down.round.bed",sep="\t",header=FALSE)
-
-# Read in original and re-calculate midpoint
-ie <- read.table("intergenic_enhancer2.bed",sep="\t")
-ie$V2_plus1 <- as.numeric(paste(ie$V2 + 1))
-
-ie$average <- round(rowMeans(subset(ie,select=c(V2_plus1, V3))))
-
-up$check <- ifelse(up$V3 == ie$average, ie$average, NA)
-# There are some discrepancies so just paste those bad boys together
-up$check2 <- ie$average
-
-# Sanity check
-check <- up[which(up$check == up$check2),]
-
-# Get cluster info for each coordinate
-up$cluster <- ifelse(up$check2 == c$average, c$ClusterID, NA)
-table(up$cluster)
-
-#1    2    3    4    5    6    7    8 
-#982 1360 1465 1088 1427 2760 1295 1529 
-
-upna <- as.data.frame(is.na(up$cluster))
-table(upna)
-
-# FALSE  TRUE 
-# 11906    19 
-
-# Do this again with the down file
-down$check <- ifelse(down$V2== ie$average, ie$average, NA)
-down$check2 <- ie$average
-
-down$cluster <- ifelse(down$check2 == c$average, c$ClusterID, NA)
-table(down$cluster)
-
-# 1    2    3    4    5    6    7    8 
-# 982 1360 1465 1088 1427 2760 1295 1529 
-
-# Good these should match!
-
 #----------------------------------------------------------------------
 ## Load in BWAvgBed Output
+#----------------------------------------------------------------------------
 
-gro_down <- read.table("groseq.forward.Chr.merge.sorted.bw.intergenic_enhancer.down.tab",sep="\t")
+# Example using K27ac
+bwdown <- read.table("NH_K27ac.sort.q2_intergenic.enhancer_downstream.tab",sep="\t")
+bwup <-read.table("NH_K27ac.sort.q2_intergenic.enhancer_upstream.tab",sep="\t")
 
 # Separate V1 to get mid
-gro_down2 <- gro_down %>% separate(V1, c("CHR","Mid", "End"))
+bwdown <- bwdown %>% separate(V1, c("CHR","Mid", "End"))
+bwup <- bwup %>% separate(V1, c("CHR","Start", "Mid") )
 
 #Make numeric
-down[,2] <- sapply(down[,2],as.numeric)
-gro_down2[,2] <- sapply(gro_down2[,2],as.numeric)
+bwdown[,2] <- sapply(bwdown[,2],as.numeric)
+bwup[,3] <- sapply(bwup[,3], as.numeric)
 
 #Reorder
-gro_down3 <- gro_down2[order(gro_down2$CHR,gro_down2$Mid),]
+bwup<- bwup[order(bwup$CHR,bwup$Mid),]
+bwdown <- bwdown[order(bwdown$CHR, bwdown$Mid),]
 
-#Get cluster info
-gro_down3$cluster <- ifelse(gro_down3$Mid %in% down$V2, down$cluster,NA)
 
-#Calculate Skew = | Up - Down |
-gro_merge2$skew <- paste(abs(gro_merge2$`Mean-up` - gro_merge2$`Mean-down`))
+# Merge up and down
+bwmerge <- merge(bwdown, bwup, by="Mid")
+bwmerge2 <- bwmerge[c(1:3,8:11,16:17)]
+colnames(bwmerge2) <- c("Mid","Chr-down", "End-down", "Mean-down","Cluster-down", "Chr-up", "Start-up", "Mean-up", "Cluster-up")
 
-write.table(gro_merge2, "groseq.intergenic_enhancer.merge.cluster.bed",quote=FALSE,row.names = FALSE,col.names = TRUE)
+#Calculate Skew
+bwmerge2$skew <- paste(abs(bwmerge2$`Mean-up` - bwmerge2$`Mean-down`))
+write.table(bwmerge2, "K27ac.intergenic_enhancer.merge.cluster.bed",quote=FALSE,row.names = FALSE,col.names = TRUE)
+
+#----------------------------------------------------------------------------
+## Master File
+#----------------------------------------------------------------------------
+
+gro_for <- read.table("groseq.forward.intergenic_enhancer.merge.cluster.bed",header=T)
+gro_for$ID <- paste("GRO-seq(+)")
+
+gro_rev <- read.table("groseq.reverse.intergenic_enhancer.merge.cluster.bed",header=T)
+gro_rev$ID <- paste("GRO-seq(-)")
+
+K4me1 <- read.table("K4me1.intergenic_enhancer.merge.cluster.bed",header=T)
+K4me1$ID <- paste("H3K4me1")
+
+K4me3 <- read.table("K4me3.intergenic_enhancer.merge.cluster.bed",header=T)
+K4me3$ID <- paste("H3K4me3")
+
+K27me3 <- read.table("K27me3.sort.q2_intergenic_enhancer.merge.cluster.bed",header=T)
+K27me3$ID <- paste("H3K27me3")
+
+K27ac <- read.table("K27ac.intergenic_enhancer.merge.cluster.bed",header=T)
+K27ac$ID <- paste("H3K27ac")
+
+# Fix columns
+K27me3 <- K27me3[c(2:3,9,18,20:21)]
+colnames(K27me3) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+K27ac <- K27ac[c(2,1,4,8,10:11)]
+colnames(K27ac) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+K4me1 <- K4me1[c(2,1,4,8,10:11)]
+colnames(K4me1) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+K4me3 <- K4me3[c(2,1,4,8,10:11)]
+colnames(K4me3) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+gro_for <- gro_for[c(2,1,4,8,10:11)]
+colnames(gro_for) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+gro_rev <- gro_rev[c(2,1,4,8,10:11)]
+colnames(gro_rev) <- c("CHR", "MID","MEAN-DOWN","MEAN-UP","SKEW","ID")
+
+AT <- rbind(gro_for,gro_rev,K4me3,K4me1, K27ac,K27me3)
+AT$Type <- paste("Arabidopsis")
+
+write.table(AT, "AT.intergenic_enhancer.skew.bed",sep="\t",col.names = T, row.names = F,quote = F)
+
+#----------------------------------------------------------------------------
+### Read in everything
+
+Dm <- read.table("~/Desktop/Figures/Bed Files/Drosophila/DM.intergenic_enhancer.skew.bed",header=T)
+
+Hs <- read.table("~/Desktop/Figures/Bed Files/Human/Hs.intergenic_enhancer.skew.bed",header=T)
+# reorder to match Drosophila
+Hs2 <- Hs[c(2,1,3:4,7,6,5)]
+Hs <- Hs2
+
+At <- read.table("~/Desktop/Figures/Bed Files/Skew/AT.intergenic_enhancer.skew.bed", header=T)
+
+# Make column names match
+
+colnames(Hs) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+colnames(Dm) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+colnames(At) <- c("CHR", "MID","MEAN.DOWN","MEAN.UP","SKEW","ID","TYPE")
+
+skew <- rbind(Hs, Dm, At)
+write.table(skew, "All.skew.intergenic_enhancer.bed",row.names = F,col.names = T, quote=F)
+
+
+#----------------------------------------------------------------------
+## Graph  and Analyze Skew
+#----------------------------------------------------------------------------
+
+# Transform skew (log2 + 1)
+gro$skewlog2 <- log2(gro$Skew + 1)
+
+# Function to get summary stats
+gro %>%
+  group_by(species) %>%
+  summarise(
+    count = n(),
+    mean = mean(skewlog2),
+    median = median(skewlog2),
+    sd = sd(skewlog2)
+  )
+
+# A tibble: 3 × 5
+#species     count  mean median    sd
+#<chr>       <int> <dbl>  <dbl> <dbl>
+#  1 Arabidopsis 23850 2.94    2.11  3.42
+#  2 Drosophila  30600 2.02    0     3.10
+#  3 Human       72440 0.837   0     1.88
+
+#Arabidopsis vs. Human
+at_human <- gro[which(gro$species=="Arabidopsis" | gro$species=="Human"),]
+
+res <- wilcox.test(skewlog2 ~ species, data = at_human)
+res
+
+#Wilcoxon rank sum test with continuity correction
+#data:  skewlog2 by species
+#W = 1179640732, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+
+#----------------------------------------------------------------------------
+
+#Arabidopsis vs. Fly
+at_fly <- gro[which(gro$species=="Arabidopsis" | gro$species=="Drosophila"),]
+
+res <- wilcox.test(skewlog2 ~ species, data = at_fly)
+res
+
+#Wilcoxon rank sum test with continuity correction
+#data:  skewlog2 by species
+#W = 424502656, p-value < 2.2e-16
+#alternative hypothesis: true location shift is not equal to 0
+
+#----------------------------------------------------------------------------
+## Visulaize Data
+#----------------------------------------------------------------------------
+
+library(ggplot2)
+library(ggsignif)
+
+# Function to get mean +/- SD in graph
+data_summary <- function(x) {
+  m <- mean(x)
+  ymin <- m-sd(x)
+  ymax <- m+sd(x)
+  return(c(y=m,ymin=ymin,ymax=ymax))
+}
+
+# Re-label X axis
+xlabs <- c("A.thaliana", "D. melanogaster", "H. sapiens")
+
+# Violin Plot
+
+ggplot(gro, aes(x=species, y=skewlog2, color=species)) + geom_violin() +
+  # Add Mean +/- SD function
+  stat_summary(fun.data=data_summary) +
+  # Edit title and legend
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5,face="bold"),axis.text.x = element_text(face="italic") ) +
+  labs(title="Skew of GRO-seq data Over Intergenic Enhancer Regions",
+       x="Species", y="Skew (log2+1)") +
+  # Put in our x labels
+  scale_x_discrete(labels=xlabs) +
+  # Denote significance from Wilcoxon Rank Sum Test
+  geom_signif(
+    comparisons=list(c("Arabidopsis", "Drosophila")),map_signif_level = TRUE, y_position = 23, test="wilcox.test", color="black") +
+  geom_signif(
+    comparisons=list(c("Arabidopsis","Human")), map_signif_level = TRUE, y_position = 25,test="wilcox.test", color="black")
+
+
+
+
+
 
 
 
